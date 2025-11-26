@@ -1,131 +1,154 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>عارض KML - Cesium</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- استخدم نسخة Cesium من CDN -->
-  <link href="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-  <script src="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js"></script>
-  <style>
-    html, body, #cesiumContainer {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      direction: rtl;
-      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-    }
-    #topbar{
-      position: absolute;
-      z-index: 99;
-      left: 12px;
-      top: 12px;
-      background: rgba(255,255,255,0.9);
-      padding: 8px 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    #token {
-      width: 420px;
-      font-size: 13px;
-    }
-    button { margin-left:8px; padding:6px 10px; }
-  </style>
+<meta charset="utf-8">
+<title>Interactive Land Plots - Cesium</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<style>
+html, body, #cesiumContainer {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+</style>
 </head>
 <body>
-  <div id="cesiumContainer"></div>
+<div id="cesiumContainer"></div>
 
-  <div id="topbar">
-    <div style="margin-bottom:6px;"><strong>عارض KML محلي - Cesium</strong></div>
-    <!-- ضع توكن Cesium Ion هنا ثم اضغط تحميل -->
-    <label for="token">Cesium Ion Access Token:</label>
-    <input id="token" placeholder="ضع التوكن هنا" />
-    <button id="loadBtn">تحميل وفتح KML</button>
-    <div id="status" style="margin-top:6px;color:#333;"></div>
-  </div>
+<script>
+// توكن Cesium Ion الجديد (آخر توكن زودتني به)
+Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhYzg2MjkyYS03YWU1LTQ1MTUtODAyOS03YWE4N2Q3M2M5Y2YiLCJpZCI6MzU1MzM3LCJpYXQiOjE3NjQxOTk3MzV9.t1H3PYoQg-7-p8RPUU2ruN8cmiRoBI72HpkrTKkQbiQ';
 
-  <script>
-    // نحتفظ بمتغير viewer ليمكننا إعادة التهيئة إذا لزم
-    let viewer = null;
+let selectedPlotLabel = undefined;
+let viewer = null;
 
-    function createViewer() {
-      if (viewer) {
-        try { viewer.destroy(); } catch(e) {}
-      }
-      // تأكد من ضبط التوكن قبل إنشاء المشاهد
-      const token = Cesium.Ion.defaultAccessToken;
-      if (!token) {
-        document.getElementById('status').textContent = '⚠ اضع توكن الـ Cesium Ion في الحقل ثم اضغط "تحميل وفتح KML".';
-      }
-      viewer = new Cesium.Viewer('cesiumContainer', {
-        terrainProvider: Cesium.Terrain.createWorldTerrain ? Cesium.Terrain.createWorldTerrain() : undefined,
-        baseLayerPicker: true,
-        geocoder: true,
-        homeButton: true,
-        sceneModePicker: true,
+try {
+    viewer = new Cesium.Viewer("cesiumContainer", {
+        terrain: Cesium.Terrain.fromWorldTerrain(),
+        imageryProvider: Cesium.createWorldImagery({
+            style: Cesium.ImageryLayerStyle.AERIAL
+        }),
+        animation: false,
         timeline: false,
-        animation: false
-      });
+        baseLayerPicker: true,
+        fullscreenButton: true,
+        geocoder: false,
+        homeButton: true,
+        navigationHelpButton: false,
+        infoBox: false
+    });
+    console.log("Cesium Viewer initialized successfully.");
+
+} catch (error) {
+    console.error("خطأ أثناء تهيئة Cesium Viewer:", error);
+    alert(`حدث خطأ أثناء تهيئة الخريطة: ${error.message}. يرجى التحقق من دعم المتصفح لـ WebGL.`);
+}
+
+async function loadLandPlots(dataSourcePath) {
+    if (!viewer) {
+        console.error("Cesium Viewer غير مهيأ، لا يمكن تحميل البيانات.");
+        alert("خطأ: لم يتم تهيئة الخريطة، لا يمكن تحميل البيانات.");
+        return;
     }
 
-    document.getElementById('loadBtn').addEventListener('click', function() {
-      const inputToken = document.getElementById('token').value.trim();
-      if (!inputToken) {
-        document.getElementById('status').textContent = '🛑 الرجاء إدخال توكن صالح من Cesium Ion.';
-        return;
-      }
-      Cesium.Ion.defaultAccessToken = inputToken;
-      document.getElementById('status').textContent = '🔄 جارٍ إنشاء المشهد...';
-      try {
-        createViewer();
-      } catch (e) {
-        console.error(e);
-        document.getElementById('status').textContent = '❌ خطأ أثناء إنشاء المشهد: ' + e.message;
-        return;
-      }
-
-      // نحمل ملف KML المحلي (data.kml)
-      const kmlUrl = 'data.kml';
-      Cesium.KmlDataSource.load(kmlUrl, { clampToGround: true })
-        .then(function(dataSource) {
-          viewer.dataSources.add(dataSource);
-          // ضبط الكاميرا للانتقال إلى محتويات الـ KML
-          viewer.zoomTo(dataSource).otherwise(function(err){
-            console.warn('zoomTo failed', err);
-          });
-          document.getElementById('status').textContent = '✅ تم تحميل KML بنجاح.';
-        })
-        .catch(function(err){
-          console.error('فشل تحميل KML:', err);
-          // تفصيل الأخطاء الشائعة للمستخدم بشكل مبسط
-          let msg = 'فشل تحميل KML. ';
-          if (err && err.message && err.message.indexOf('401') !== -1) {
-            msg += 'الخطأ 401: تأكد من صحة توكن Cesium Ion وأن له الصلاحيات المطلوبة.';
-          } else if (err && err.message) {
-            msg += err.message;
-          }
-          msg += ' افتح وحدة التحكم (Console) للحصول على تفاصيل أكثر.';
-          document.getElementById('status').textContent = msg;
+    try {
+        console.log(`بدء تحميل ملف KML من: ${dataSourcePath}`);
+        
+        const kmlDataSource = await Cesium.KmlDataSource.load(dataSourcePath, {
+            camera: viewer.scene.camera,
+            canvas: viewer.scene.canvas,
+            clampToGround: true
         });
-    });
 
-    // تلميح: يمكنك حفظ التوكن في الـ localStorage لراحة الاستخدام
-    // استعادة توكن محفوظ إن وُجد
-    (function(){
-      try {
-        const saved = localStorage.getItem('cesium_ion_token');
-        if (saved) {
-          document.getElementById('token').value = saved;
+        await viewer.dataSources.add(kmlDataSource);
+        await viewer.zoomTo(kmlDataSource);
+        console.log(`تم تحميل ${kmlDataSource.entities.values.length} قطعة أرض من ملف KML بنجاح.`);
+
+        kmlDataSource.entities.values.forEach(entity => {
+            if (Cesium.defined(entity.polygon)) {
+                const statusProperty = entity.properties && entity.properties.status;
+                const status = statusProperty && statusProperty.getValue();
+
+                if (status === 'مباع') {
+                     entity.polygon.material = Cesium.Color.RED.withAlpha(0.4);
+                     entity.polygon.outlineColor = Cesium.Color.RED.withAlpha(0.7);
+                } else {
+                    entity.polygon.material = Cesium.Color.fromCssColorString('#4CAF50').withAlpha(0.4);
+                    entity.polygon.outlineColor = Cesium.Color.BLACK.withAlpha(0.7);
+                }
+                entity.polygon.outlineWidth = 3;
+            }
+        });
+
+    } catch (error) {
+        console.error('حدث خطأ أثناء تحميل قطع الأراضي من KML:', error);
+        alert('حدث خطأ أثناء تحميل ملف KML: يرجى التحقق من المسار والتنسيق.');
+    }
+}
+
+// استدعاء دالة تحميل KML، مع تحديد اسم الملف إلى data.kml
+loadLandPlots('./data.kml');
+
+const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+handler.setInputAction(function(click) {
+    if (Cesium.defined(selectedPlotLabel)) {
+        viewer.entities.remove(selectedPlotLabel);
+        selectedPlotLabel = undefined;
+    }
+
+    const pickedObject = viewer.scene.pick(click.position);
+
+    if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.id) && pickedObject.id.polygon) {
+        const clickedPlot = pickedObject.id;
+        const properties = clickedPlot.properties;
+
+        if (Cesium.defined(properties)) {
+            let labelText = '';
+            if (properties.id && properties.id.getValue()) labelText += `معرف القطعة: ${properties.id.getValue()}\n`;
+            if (properties.status && properties.status.getValue()) labelText += `الحالة: ${properties.status.getValue()}\n`;
+            if (properties.area && properties.area.getValue()) labelText += `المساحة: ${properties.area.getValue()} متر مربع\n`;
+            if (properties.price && properties.price.getValue()) labelText += `السعر: ${properties.price.getValue()}\n`;
+
+            const polygonHierarchy = clickedPlot.polygon.hierarchy.getValue();
+            const centroid = Cesium.BoundingSphere.fromPoints(polygonHierarchy.positions).center;
+            const cartographicCentroid = Cesium.Cartographic.fromCartesian(centroid);
+            const longitude = Cesium.Math.toDegrees(cartographicCentroid.longitude);
+            const latitude = Cesium.Math.toDegrees(cartographicCentroid.latitude);
+
+            selectedPlotLabel = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
+                label: {
+                    text: labelText.trim(),
+                    font: '20px sans-serif',
+                    fillColor: Cesium.Color.WHITE,
+                    outlineColor: Cesium.Color.BLACK,
+                    outlineWidth: 2,
+                    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                    pixelOffset: new Cesium.Cartesian2(0, -20),
+                    heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+                    backgroundColor: Cesium.Color.fromCssColorString('#424242').withAlpha(0.7),
+                    showBackground: true,
+                }
+            });
+
+            viewer.selectedEntity = clickedPlot;
         }
-      } catch(e){}
-    })();
+    } else {
+        viewer.selectedEntity = undefined;
+    }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    // حفظ التوكن عند تغييره
-    document.getElementById('token').addEventListener('change', function(){
-      try { localStorage.setItem('cesium_ion_token', this.value); } catch(e){}
-    });
-  </script>
+viewer.camera.changed.addEventListener(function() {
+    if (Cesium.defined(selectedPlotLabel)) {
+        viewer.entities.remove(selectedPlotLabel);
+        selectedPlotLabel = undefined;
+        viewer.selectedEntity = undefined;
+    }
+});
+</script>
 </body>
 </html>
