@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <title>عارض KML - Cesium</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- استخدم نسخة Cesium من CDN -->
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js"></script>
+  <style>
+    html, body, #cesiumContainer {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      direction: rtl;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    }
+    #topbar{
+      position: absolute;
+      z-index: 99;
+      left: 12px;
+      top: 12px;
+      background: rgba(255,255,255,0.9);
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    #token {
+      width: 420px;
+      font-size: 13px;
+    }
+    button { margin-left:8px; padding:6px 10px; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <div id="topbar">
+    <div style="margin-bottom:6px;"><strong>عارض KML محلي - Cesium</strong></div>
+    <!-- ضع توكن Cesium Ion هنا ثم اضغط تحميل -->
+    <label for="token">Cesium Ion Access Token:</label>
+    <input id="token" placeholder="ضع التوكن هنا" />
+    <button id="loadBtn">تحميل وفتح KML</button>
+    <div id="status" style="margin-top:6px;color:#333;"></div>
+  </div>
+
+  <script>
+    // نحتفظ بمتغير viewer ليمكننا إعادة التهيئة إذا لزم
+    let viewer = null;
+
+    function createViewer() {
+      if (viewer) {
+        try { viewer.destroy(); } catch(e) {}
+      }
+      // تأكد من ضبط التوكن قبل إنشاء المشاهد
+      const token = Cesium.Ion.defaultAccessToken;
+      if (!token) {
+        document.getElementById('status').textContent = '⚠ اضع توكن الـ Cesium Ion في الحقل ثم اضغط "تحميل وفتح KML".';
+      }
+      viewer = new Cesium.Viewer('cesiumContainer', {
+        terrainProvider: Cesium.Terrain.createWorldTerrain ? Cesium.Terrain.createWorldTerrain() : undefined,
+        baseLayerPicker: true,
+        geocoder: true,
+        homeButton: true,
+        sceneModePicker: true,
+        timeline: false,
+        animation: false
+      });
+    }
+
+    document.getElementById('loadBtn').addEventListener('click', function() {
+      const inputToken = document.getElementById('token').value.trim();
+      if (!inputToken) {
+        document.getElementById('status').textContent = '🛑 الرجاء إدخال توكن صالح من Cesium Ion.';
+        return;
+      }
+      Cesium.Ion.defaultAccessToken = inputToken;
+      document.getElementById('status').textContent = '🔄 جارٍ إنشاء المشهد...';
+      try {
+        createViewer();
+      } catch (e) {
+        console.error(e);
+        document.getElementById('status').textContent = '❌ خطأ أثناء إنشاء المشهد: ' + e.message;
+        return;
+      }
+
+      // نحمل ملف KML المحلي (data.kml)
+      const kmlUrl = 'data.kml';
+      Cesium.KmlDataSource.load(kmlUrl, { clampToGround: true })
+        .then(function(dataSource) {
+          viewer.dataSources.add(dataSource);
+          // ضبط الكاميرا للانتقال إلى محتويات الـ KML
+          viewer.zoomTo(dataSource).otherwise(function(err){
+            console.warn('zoomTo failed', err);
+          });
+          document.getElementById('status').textContent = '✅ تم تحميل KML بنجاح.';
+        })
+        .catch(function(err){
+          console.error('فشل تحميل KML:', err);
+          // تفصيل الأخطاء الشائعة للمستخدم بشكل مبسط
+          let msg = 'فشل تحميل KML. ';
+          if (err && err.message && err.message.indexOf('401') !== -1) {
+            msg += 'الخطأ 401: تأكد من صحة توكن Cesium Ion وأن له الصلاحيات المطلوبة.';
+          } else if (err && err.message) {
+            msg += err.message;
+          }
+          msg += ' افتح وحدة التحكم (Console) للحصول على تفاصيل أكثر.';
+          document.getElementById('status').textContent = msg;
+        });
+    });
+
+    // تلميح: يمكنك حفظ التوكن في الـ localStorage لراحة الاستخدام
+    // استعادة توكن محفوظ إن وُجد
+    (function(){
+      try {
+        const saved = localStorage.getItem('cesium_ion_token');
+        if (saved) {
+          document.getElementById('token').value = saved;
+        }
+      } catch(e){}
+    })();
+
+    // حفظ التوكن عند تغييره
+    document.getElementById('token').addEventListener('change', function(){
+      try { localStorage.setItem('cesium_ion_token', this.value); } catch(e){}
+    });
+  </script>
+</body>
+</html>
